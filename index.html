@@ -1,75 +1,138 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Trading Journal Pro</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<meta charset="UTF-8">
+<title>Trading Journal Pro+</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body{
+  margin:0;
+  font-family:Arial;
+  background:#020617;
+  color:white;
+  overflow-x:hidden;
+}
+
+/* Glow effect */
+body::before{
+  content:"";
+  position:fixed;
+  width:300px;
+  height:300px;
+  background:radial-gradient(circle, rgba(34,197,94,0.3), transparent 60%);
+  pointer-events:none;
+  transform:translate(-50%,-50%);
+}
+
+.container{
+  padding:20px;
+  max-width:1100px;
+  margin:auto;
+}
+
+.card{
+  background:#0f172a;
+  padding:15px;
+  border-radius:10px;
+  box-shadow:0 0 20px rgba(0,0,0,0.5);
+}
+
+.small-form input, .small-form select{
+  padding:5px;
+  font-size:12px;
+}
+
+.grid{
+  display:grid;
+  gap:15px;
+}
+
+.grid-2{
+  grid-template-columns:1fr 1fr;
+}
+
+canvas{
+  background:#020617;
+  border-radius:10px;
+}
+</style>
 </head>
-<body style="font-family: Arial; background:#0f172a; color:white; padding:20px;">
 
-<h1 style="font-size:28px;">📊 Trading Journal</h1>
+<body>
+<div class="container">
 
-<div style="display:grid; grid-template-columns: repeat(auto-fit,minmax(250px,1fr)); gap:20px;">
+<h2>📊 Trading Dashboard</h2>
 
-<!-- Form -->
-<div style="background:#1e293b; padding:20px; border-radius:10px;">
-  <h3>Add Trade</h3>
-  <div style="display:grid; gap:10px;">
-    <select id="type"><option>Long</option><option>Short</option></select>
-    <select id="instrument"><option>NQ</option><option>ES</option><option>GC</option></select>
-    <input id="entry" placeholder="Entry Price">
-    <input id="exit" placeholder="Exit Price">
-    <input id="lots" placeholder="Lots">
-    <input id="date" type="date">
-    <button onclick="addTrade()" style="padding:10px; background:#22c55e; border:none; color:black; border-radius:5px; font-weight:bold;">Add Trade</button>
-  </div>
+<div class="grid grid-2">
+
+<!-- Small Form -->
+<div class="card small-form">
+<h4>Add Trade</h4>
+<select id="type"><option>Long</option><option>Short</option></select>
+<select id="instrument"><option>NQ</option><option>ES</option><option>GC</option></select>
+<input id="entry" placeholder="Entry">
+<input id="exit" placeholder="Exit">
+<input id="lots" placeholder="Lots">
+<input id="date" type="date">
+<button onclick="addTrade()" style="margin-top:5px;">Add</button>
 </div>
 
 <!-- Stats -->
-<div style="background:#1e293b; padding:20px; border-radius:10px;">
-  <h3>Statistics</h3>
-  <div id="stats"></div>
+<div class="card">
+<h4>Stats</h4>
+<div id="stats"></div>
 </div>
 
 </div>
 
 <!-- Charts -->
-<div style="margin-top:30px; display:grid; grid-template-columns: repeat(auto-fit,minmax(300px,1fr)); gap:20px;">
+<div class="grid" style="margin-top:20px;">
 
-<div style="background:#1e293b; padding:15px; border-radius:10px;">
-  <h3>Equity Curve</h3>
-  <canvas id="equityChart"></canvas>
+<div class="card">
+<h4>Equity Curve</h4>
+<canvas id="equityChart"></canvas>
 </div>
 
-<div style="background:#1e293b; padding:15px; border-radius:10px;">
-  <h3>PnL Distribution</h3>
-  <canvas id="histogram"></canvas>
+<div class="card">
+<h4>PnL Distribution</h4>
+<canvas id="histogram"></canvas>
 </div>
 
-<div style="background:#1e293b; padding:15px; border-radius:10px;">
-  <h3>Daily PnL</h3>
-  <canvas id="dailyChart"></canvas>
+<div class="card">
+<h4>Daily PnL</h4>
+<canvas id="dailyChart"></canvas>
 </div>
 
 </div>
 
-<!-- Trades -->
-<div style="margin-top:30px; background:#1e293b; padding:20px; border-radius:10px;">
-  <h3>Trades</h3>
-  <div id="trades"></div>
 </div>
 
 <script>
-let trades = JSON.parse(localStorage.getItem("trades") || "[]");
 
-function calculatePnL(t){
-  const entry=+t.entry, exit=+t.exit, lots=+t.lots;
-  if(!entry||!exit||!lots) return 0;
-  return (t.type==="Long"? exit-entry: entry-exit)*lots;
+// Cursor glow follow
+const glow=document.body;
+document.addEventListener('mousemove',e=>{
+  glow.style.setProperty('--x',e.clientX+'px');
+  glow.style.setProperty('--y',e.clientY+'px');
+  document.body.style.background=`radial-gradient(circle at ${e.clientX}px ${e.clientY}px, #0f172a, #020617)`;
+});
+
+let trades=JSON.parse(localStorage.getItem("trades")||"[]");
+
+function pnl(t){
+  return (t.type==='Long'?t.exit-t.entry:t.entry-t.exit)*t.lots;
 }
 
 function addTrade(){
-  const t={type:type.value,instrument:instrument.value,entry:entry.value,exit:exit.value,lots:lots.value,date:date.value,id:Date.now()};
+  const t={
+    type:type.value,
+    instrument:instrument.value,
+    entry:+entry.value,
+    exit:+exit.value,
+    lots:+lots.value,
+    date:date.value
+  };
   if(!t.entry||!t.exit||!t.lots||!t.date) return;
   trades.push(t);
   localStorage.setItem("trades",JSON.stringify(trades));
@@ -77,67 +140,65 @@ function addTrade(){
 }
 
 function stats(){
-  const pnls=trades.map(calculatePnL);
-  const wins=pnls.filter(p=>p>0);
-  const losses=pnls.filter(p=>p<0);
-  const total=pnls.reduce((a,b)=>a+b,0);
+  const arr=trades.map(pnl);
+  const wins=arr.filter(x=>x>0);
+  const losses=arr.filter(x=>x<0);
+
+  const total=arr.reduce((a,b)=>a+b,0);
+  const winRate=arr.length?(wins.length/arr.length)*100:0;
   const avgWin=wins.length?wins.reduce((a,b)=>a+b,0)/wins.length:0;
   const avgLoss=losses.length?losses.reduce((a,b)=>a+b,0)/losses.length:0;
-  const winRate=pnls.length?(wins.length/pnls.length)*100:0;
-  const mean=total/(pnls.length||1);
-  const variance=pnls.reduce((a,b)=>a+(b-mean)**2,0)/(pnls.length||1);
-  const std=Math.sqrt(variance);
+
+  const mean=total/(arr.length||1);
+  const std=Math.sqrt(arr.reduce((a,b)=>a+(b-mean)**2,0)/(arr.length||1));
   const sharpe=std?mean/std:0;
-  const profitFactor=Math.abs(wins.reduce((a,b)=>a+b,0)/(losses.reduce((a,b)=>a+b,0)||1));
-  let peak=0,dd=0,cum=0;
-  pnls.forEach(p=>{cum+=p;if(cum>peak) peak=cum; if(peak-cum>dd) dd=peak-cum;});
-  return {total,avgWin,avgLoss,winRate,sharpe,profitFactor,dd};
+
+  return {total,winRate,avgWin,avgLoss,sharpe};
 }
 
-function equityData(){let c=0;return trades.map((t,i)=>{c+=calculatePnL(t);return {x:i+1,y:c}})}
-function dailyPnL(){const m={};trades.forEach(t=>{m[t.date]=(m[t.date]||0)+calculatePnL(t)});return Object.entries(m).map(([d,v])=>({x:d,y:v}))}
-function pnlList(){return trades.map(calculatePnL)}
+function equity(){
+  let c=0;
+  return trades.map((t,i)=>{
+    c+=pnl(t);
+    return {x:i+1,y:c};
+  });
+}
 
-let equityChart,histChart,dailyChart;
+function daily(){
+  const m={};
+  trades.forEach(t=>{
+    m[t.date]=(m[t.date]||0)+pnl(t);
+  });
+  return Object.entries(m).map(([d,v])=>({x:d,y:v}));
+}
 
-function renderCharts(){
-  if(equityChart) equityChart.destroy();
-  equityChart=new Chart(equityChartCanvas,{type:'line',data:{labels:equityData().map(p=>p.x),datasets:[{label:'Equity',data:equityData().map(p=>p.y)}]}});
+let c1,c2,c3;
 
-  if(histChart) histChart.destroy();
-  histChart=new Chart(histogram,{type:'bar',data:{labels:pnlList(),datasets:[{label:'PnL',data:pnlList()}]}});
+function draw(){
+  if(c1) c1.destroy();
+  const e=equity();
+  c1=new Chart(equityChart,{type:'line',data:{labels:e.map(x=>x.x),datasets:[{data:e.map(x=>x.y), borderWidth:2}]}});
 
-  const d=dailyPnL();
-  if(dailyChart) dailyChart.destroy();
-  dailyChart=new Chart(dailyChartCanvas,{type:'bar',data:{labels:d.map(x=>x.x),datasets:[{label:'Daily',data:d.map(x=>x.y)}]}});
+  if(c2) c2.destroy();
+  const p=trades.map(pnl);
+  c2=new Chart(histogram,{type:'bar',data:{labels:p,datasets:[{data:p}]}});
+
+  if(c3) c3.destroy();
+  const d=daily();
+  c3=new Chart(dailyChart,{type:'bar',data:{labels:d.map(x=>x.x),datasets:[{data:d.map(x=>x.y)}]}});
 }
 
 function render(){
   const s=stats();
-  statsDiv.innerHTML=`
-  <div>Total PnL: ${s.total.toFixed(2)}</div>
-  <div>Win Rate: ${s.winRate.toFixed(2)}%</div>
-  <div>Sharpe: ${s.sharpe.toFixed(2)}</div>
-  <div>Profit Factor: ${s.profitFactor.toFixed(2)}</div>
-  <div>Drawdown: ${s.dd.toFixed(2)}</div>
+  stats.innerHTML=`
+  Total: ${s.total.toFixed(2)}<br>
+  Win Rate: ${s.winRate.toFixed(1)}%<br>
+  Sharpe: ${s.sharpe.toFixed(2)}<br>
+  Avg Win: ${s.avgWin.toFixed(2)}<br>
+  Avg Loss: ${s.avgLoss.toFixed(2)}
   `;
-
-  tradesDiv.innerHTML="";
-  trades.forEach(t=>{
-    const pnl=calculatePnL(t);
-    tradesDiv.innerHTML+=`<div style='border-bottom:1px solid gray; padding:10px;'>
-    <b>${t.date}</b> | ${t.instrument} | ${t.type} | PnL: <span style='color:${pnl>=0?"#22c55e":"#ef4444"}'>${pnl.toFixed(2)}</span>
-    </div>`;
-  });
-
-  renderCharts();
+  draw();
 }
-
-const equityChartCanvas=document.getElementById('equityChart');
-const histogram=document.getElementById('histogram');
-const dailyChartCanvas=document.getElementById('dailyChart');
-const statsDiv=document.getElementById('stats');
-const tradesDiv=document.getElementById('trades');
 
 render();
 </script>
