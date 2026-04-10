@@ -1,130 +1,140 @@
-// Improved Trading Journal (Clean UI + Charts + Better Stats)
-import { useState, useEffect } from "react";
-import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Trading Journal</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body style="font-family: Arial; padding:20px;">
 
-export default function App() {
-  const [trades, setTrades] = useState([]);
-  const [form, setForm] = useState({
-    type: "Long",
-    instrument: "NQ",
-    entry: "",
-    exit: "",
-    lots: "",
-    date: "",
+<h1>📊 Trading Journal</h1>
+
+<div style="display:grid; gap:10px; max-width:400px;">
+  <select id="type">
+    <option>Long</option>
+    <option>Short</option>
+  </select>
+
+  <select id="instrument">
+    <option>NQ</option>
+    <option>ES</option>
+    <option>GC</option>
+  </select>
+
+  <input id="entry" placeholder="Entry Price">
+  <input id="exit" placeholder="Exit Price">
+  <input id="lots" placeholder="Lots">
+  <input id="date" type="date">
+
+  <button onclick="addTrade()" style="padding:10px; background:black; color:white;">Add Trade</button>
+</div>
+
+<h2>📈 Statistics</h2>
+<p id="stats"></p>
+
+<h2>📉 Equity Curve</h2>
+<canvas id="chart" width="600" height="300"></canvas>
+
+<h2>📋 Trades</h2>
+<div id="trades"></div>
+
+<script>
+let trades = JSON.parse(localStorage.getItem("trades") || "[]");
+
+function calculatePnL(t) {
+  const entry = parseFloat(t.entry);
+  const exit = parseFloat(t.exit);
+  const lots = parseFloat(t.lots);
+  if (!entry || !exit || !lots) return 0;
+  return (t.type === "Long" ? exit - entry : entry - exit) * lots;
+}
+
+function addTrade() {
+  const t = {
+    type: document.getElementById("type").value,
+    instrument: document.getElementById("instrument").value,
+    entry: document.getElementById("entry").value,
+    exit: document.getElementById("exit").value,
+    lots: document.getElementById("lots").value,
+    date: document.getElementById("date").value,
+    id: Date.now()
+  };
+
+  if (!t.entry || !t.exit || !t.lots || !t.date) return;
+
+  trades.push(t);
+  localStorage.setItem("trades", JSON.stringify(trades));
+  render();
+}
+
+function stats() {
+  const pnls = trades.map(calculatePnL);
+  const wins = pnls.filter(p => p > 0);
+  const losses = pnls.filter(p => p < 0);
+
+  const total = pnls.reduce((a,b)=>a+b,0);
+  const avgWin = wins.length ? wins.reduce((a,b)=>a+b,0)/wins.length : 0;
+  const avgLoss = losses.length ? losses.reduce((a,b)=>a+b,0)/losses.length : 0;
+  const winRate = pnls.length ? (wins.length / pnls.length)*100 : 0;
+
+  return { total, avgWin, avgLoss, winRate };
+}
+
+function equityData() {
+  let cum = 0;
+  return trades.map((t,i) => {
+    cum += calculatePnL(t);
+    return cum;
+  });
+}
+
+let chart;
+function renderChart() {
+  const ctx = document.getElementById('chart');
+  const data = equityData();
+
+  if (chart) chart.destroy();
+
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: data.map((_,i)=>i+1),
+      datasets: [{
+        label: 'Equity',
+        data: data
+      }]
+    }
+  });
+}
+
+function render() {
+  const s = stats();
+  document.getElementById("stats").innerHTML = `
+    Total PnL: ${s.total.toFixed(2)} <br>
+    Avg Win: ${s.avgWin.toFixed(2)} <br>
+    Avg Loss: ${s.avgLoss.toFixed(2)} <br>
+    Win Rate: ${s.winRate.toFixed(2)}%
+  `;
+
+  const tradesDiv = document.getElementById("trades");
+  tradesDiv.innerHTML = "";
+
+  trades.forEach(t => {
+    const pnl = calculatePnL(t);
+    tradesDiv.innerHTML += `
+      <div style="border:1px solid #ccc; padding:10px; margin:10px 0;">
+        <strong>${t.date}</strong> | ${t.instrument} | ${t.type}<br>
+        Entry: ${t.entry} | Exit: ${t.exit} | Lots: ${t.lots}<br>
+        PnL: ${pnl.toFixed(2)}
+      </div>
+    `;
   });
 
-  useEffect(() => {
-    const saved = localStorage.getItem("trades");
-    if (saved) setTrades(JSON.parse(saved));
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem("trades", JSON.stringify(trades));
-  }, [trades]);
-
-  const calculatePnL = (t) => {
-    const entry = parseFloat(t.entry);
-    const exit = parseFloat(t.exit);
-    const lots = parseFloat(t.lots);
-    if (!entry || !exit || !lots) return 0;
-    return (t.type === "Long" ? exit - entry : entry - exit) * lots;
-  };
-
-  const addTrade = () => {
-    if (!form.entry || !form.exit || !form.lots || !form.date) return;
-    const newTrade = { ...form, id: Date.now() };
-    setTrades([...trades, newTrade]);
-    setForm({ type: "Long", instrument: "NQ", entry: "", exit: "", lots: "", date: "" });
-  };
-
-  const stats = () => {
-    const pnls = trades.map(calculatePnL);
-    const wins = pnls.filter(p => p > 0);
-    const losses = pnls.filter(p => p < 0);
-
-    const total = pnls.reduce((a,b)=>a+b,0);
-    const avgWin = wins.length ? wins.reduce((a,b)=>a+b,0)/wins.length : 0;
-    const avgLoss = losses.length ? losses.reduce((a,b)=>a+b,0)/losses.length : 0;
-    const winRate = pnls.length ? (wins.length / pnls.length) * 100 : 0;
-
-    const mean = total / (pnls.length || 1);
-    const variance = pnls.reduce((a,b)=>a + Math.pow(b - mean,2),0)/(pnls.length || 1);
-    const std = Math.sqrt(variance);
-    const sharpe = std ? mean/std : 0;
-
-    return { total, avgWin, avgLoss, winRate, sharpe };
-  };
-
-  const equityCurve = () => {
-    let cum = 0;
-    return trades.map((t, i) => {
-      cum += calculatePnL(t);
-      return { trade: i + 1, equity: cum };
-    });
-  };
-
-  const s = stats();
-
-  return (
-    <div style={{ padding: 20, fontFamily: "Arial" }}>
-      <h1 style={{ fontSize: 28, fontWeight: "bold" }}>📊 Trading Journal</h1>
-
-      {/* Form */}
-      <div style={{ display: "grid", gap: 10, maxWidth: 400, marginTop: 20 }}>
-        <select value={form.type} onChange={e=>setForm({...form, type:e.target.value})}>
-          <option>Long</option>
-          <option>Short</option>
-        </select>
-
-        <select value={form.instrument} onChange={e=>setForm({...form, instrument:e.target.value})}>
-          <option>NQ</option>
-          <option>ES</option>
-          <option>GC</option>
-        </select>
-
-        <input placeholder="Entry Price" value={form.entry} onChange={e=>setForm({...form, entry:e.target.value})} />
-        <input placeholder="Exit Price" value={form.exit} onChange={e=>setForm({...form, exit:e.target.value})} />
-        <input placeholder="Lots" value={form.lots} onChange={e=>setForm({...form, lots:e.target.value})} />
-        <input type="date" value={form.date} onChange={e=>setForm({...form, date:e.target.value})} />
-
-        <button onClick={addTrade} style={{ padding: 10, background: "black", color: "white" }}>
-          Add Trade
-        </button>
-      </div>
-
-      {/* Stats */}
-      <div style={{ marginTop: 30 }}>
-        <h2>📈 Statistics</h2>
-        <p>Total PnL: {s.total.toFixed(2)}</p>
-        <p>Avg Win: {s.avgWin.toFixed(2)}</p>
-        <p>Avg Loss: {s.avgLoss.toFixed(2)}</p>
-        <p>Win Rate: {s.winRate.toFixed(2)}%</p>
-        <p>Sharpe Ratio: {s.sharpe.toFixed(2)}</p>
-      </div>
-
-      {/* Chart */}
-      <div style={{ marginTop: 30 }}>
-        <h2>📉 Equity Curve</h2>
-        <LineChart width={600} height={300} data={equityCurve()}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="trade" />
-          <YAxis />
-          <Tooltip />
-          <Line type="monotone" dataKey="equity" />
-        </LineChart>
-      </div>
-
-      {/* Trades */}
-      <div style={{ marginTop: 30 }}>
-        <h2>📋 Trades</h2>
-        {trades.map(t => (
-          <div key={t.id} style={{ border: "1px solid #ccc", padding: 10, marginBottom: 10 }}>
-            <strong>{t.date}</strong> | {t.instrument} | {t.type}
-            <div>Entry: {t.entry} | Exit: {t.exit} | Lots: {t.lots}</div>
-            <div>PnL: {calculatePnL(t).toFixed(2)}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+  renderChart();
 }
+
+render();
+</script>
+
+</body>
+</html>
