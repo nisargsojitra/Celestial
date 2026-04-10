@@ -5,108 +5,100 @@
   <title>Trading Journal Pro</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-<body style="font-family: Arial; padding:20px; max-width:1000px; margin:auto;">
+<body style="font-family: Arial; background:#0f172a; color:white; padding:20px;">
 
-<h1>📊 Trading Journal (Pro)</h1>
+<h1 style="font-size:28px;">📊 Trading Journal</h1>
 
-<div style="display:grid; gap:10px; max-width:400px;">
-  <select id="type"><option>Long</option><option>Short</option></select>
-  <select id="instrument"><option>NQ</option><option>ES</option><option>GC</option></select>
-  <input id="entry" placeholder="Entry Price">
-  <input id="exit" placeholder="Exit Price">
-  <input id="lots" placeholder="Lots">
-  <input id="date" type="date">
-  <button onclick="addTrade()" style="padding:10px; background:black; color:white;">Add Trade</button>
+<div style="display:grid; grid-template-columns: repeat(auto-fit,minmax(250px,1fr)); gap:20px;">
+
+<!-- Form -->
+<div style="background:#1e293b; padding:20px; border-radius:10px;">
+  <h3>Add Trade</h3>
+  <div style="display:grid; gap:10px;">
+    <select id="type"><option>Long</option><option>Short</option></select>
+    <select id="instrument"><option>NQ</option><option>ES</option><option>GC</option></select>
+    <input id="entry" placeholder="Entry Price">
+    <input id="exit" placeholder="Exit Price">
+    <input id="lots" placeholder="Lots">
+    <input id="date" type="date">
+    <button onclick="addTrade()" style="padding:10px; background:#22c55e; border:none; color:black; border-radius:5px; font-weight:bold;">Add Trade</button>
+  </div>
 </div>
 
-<h2>📈 Key Statistics</h2>
-<div id="stats"></div>
+<!-- Stats -->
+<div style="background:#1e293b; padding:20px; border-radius:10px;">
+  <h3>Statistics</h3>
+  <div id="stats"></div>
+</div>
 
-<h2>📉 Equity Curve</h2>
-<canvas id="equityChart"></canvas>
+</div>
 
-<h2>📊 PnL Distribution</h2>
-<canvas id="histogram"></canvas>
+<!-- Charts -->
+<div style="margin-top:30px; display:grid; grid-template-columns: repeat(auto-fit,minmax(300px,1fr)); gap:20px;">
 
-<h2>📅 Daily PnL</h2>
-<canvas id="dailyChart"></canvas>
+<div style="background:#1e293b; padding:15px; border-radius:10px;">
+  <h3>Equity Curve</h3>
+  <canvas id="equityChart"></canvas>
+</div>
 
-<h2>📋 Trades</h2>
-<div id="trades"></div>
+<div style="background:#1e293b; padding:15px; border-radius:10px;">
+  <h3>PnL Distribution</h3>
+  <canvas id="histogram"></canvas>
+</div>
+
+<div style="background:#1e293b; padding:15px; border-radius:10px;">
+  <h3>Daily PnL</h3>
+  <canvas id="dailyChart"></canvas>
+</div>
+
+</div>
+
+<!-- Trades -->
+<div style="margin-top:30px; background:#1e293b; padding:20px; border-radius:10px;">
+  <h3>Trades</h3>
+  <div id="trades"></div>
+</div>
 
 <script>
 let trades = JSON.parse(localStorage.getItem("trades") || "[]");
 
-function calculatePnL(t) {
-  const entry = +t.entry, exit = +t.exit, lots = +t.lots;
-  if (!entry || !exit || !lots) return 0;
-  return (t.type === "Long" ? exit - entry : entry - exit) * lots;
+function calculatePnL(t){
+  const entry=+t.entry, exit=+t.exit, lots=+t.lots;
+  if(!entry||!exit||!lots) return 0;
+  return (t.type==="Long"? exit-entry: entry-exit)*lots;
 }
 
-function addTrade() {
-  const t = {
-    type: type.value,
-    instrument: instrument.value,
-    entry: entry.value,
-    exit: exit.value,
-    lots: lots.value,
-    date: date.value,
-    id: Date.now()
-  };
-  if (!t.entry || !t.exit || !t.lots || !t.date) return;
+function addTrade(){
+  const t={type:type.value,instrument:instrument.value,entry:entry.value,exit:exit.value,lots:lots.value,date:date.value,id:Date.now()};
+  if(!t.entry||!t.exit||!t.lots||!t.date) return;
   trades.push(t);
-  localStorage.setItem("trades", JSON.stringify(trades));
+  localStorage.setItem("trades",JSON.stringify(trades));
   render();
 }
 
-function stats() {
-  const pnls = trades.map(calculatePnL);
-  const wins = pnls.filter(p=>p>0);
-  const losses = pnls.filter(p=>p<0);
-
-  const total = pnls.reduce((a,b)=>a+b,0);
-  const avgWin = wins.length ? wins.reduce((a,b)=>a+b,0)/wins.length : 0;
-  const avgLoss = losses.length ? losses.reduce((a,b)=>a+b,0)/losses.length : 0;
-  const winRate = pnls.length ? (wins.length/pnls.length)*100 : 0;
-
-  const mean = total/(pnls.length||1);
-  const variance = pnls.reduce((a,b)=>a+(b-mean)**2,0)/(pnls.length||1);
-  const std = Math.sqrt(variance);
-  const sharpe = std ? mean/std : 0;
-
-  const profitFactor = Math.abs(wins.reduce((a,b)=>a+b,0) / (losses.reduce((a,b)=>a+b,0) || 1));
-
-  let peak=0, drawdown=0, cum=0;
-  pnls.forEach(p=>{
-    cum+=p;
-    if(cum>peak) peak=cum;
-    const dd = peak-cum;
-    if(dd>drawdown) drawdown=dd;
-  });
-
-  return { total, avgWin, avgLoss, winRate, sharpe, profitFactor, drawdown };
+function stats(){
+  const pnls=trades.map(calculatePnL);
+  const wins=pnls.filter(p=>p>0);
+  const losses=pnls.filter(p=>p<0);
+  const total=pnls.reduce((a,b)=>a+b,0);
+  const avgWin=wins.length?wins.reduce((a,b)=>a+b,0)/wins.length:0;
+  const avgLoss=losses.length?losses.reduce((a,b)=>a+b,0)/losses.length:0;
+  const winRate=pnls.length?(wins.length/pnls.length)*100:0;
+  const mean=total/(pnls.length||1);
+  const variance=pnls.reduce((a,b)=>a+(b-mean)**2,0)/(pnls.length||1);
+  const std=Math.sqrt(variance);
+  const sharpe=std?mean/std:0;
+  const profitFactor=Math.abs(wins.reduce((a,b)=>a+b,0)/(losses.reduce((a,b)=>a+b,0)||1));
+  let peak=0,dd=0,cum=0;
+  pnls.forEach(p=>{cum+=p;if(cum>peak) peak=cum; if(peak-cum>dd) dd=peak-cum;});
+  return {total,avgWin,avgLoss,winRate,sharpe,profitFactor,dd};
 }
 
-function equityData() {
-  let cum=0;
-  return trades.map((t,i)=>{
-    cum+=calculatePnL(t);
-    return {x:i+1, y:cum};
-  });
-}
+function equityData(){let c=0;return trades.map((t,i)=>{c+=calculatePnL(t);return {x:i+1,y:c}})}
+function dailyPnL(){const m={};trades.forEach(t=>{m[t.date]=(m[t.date]||0)+calculatePnL(t)});return Object.entries(m).map(([d,v])=>({x:d,y:v}))}
+function pnlList(){return trades.map(calculatePnL)}
 
-function dailyPnL() {
-  const map={};
-  trades.forEach(t=>{
-    const d=t.date;
-    map[d]=(map[d]||0)+calculatePnL(t);
-  });
-  return Object.entries(map).map(([d,v])=>({x:d,y:v}));
-}
-
-function pnlList(){return trades.map(calculatePnL);}
-
-let equityChart, histChart, dailyChart;
+let equityChart,histChart,dailyChart;
 
 function renderCharts(){
   if(equityChart) equityChart.destroy();
@@ -115,30 +107,26 @@ function renderCharts(){
   if(histChart) histChart.destroy();
   histChart=new Chart(histogram,{type:'bar',data:{labels:pnlList(),datasets:[{label:'PnL',data:pnlList()}]}});
 
-  const daily=dailyPnL();
+  const d=dailyPnL();
   if(dailyChart) dailyChart.destroy();
-  dailyChart=new Chart(dailyChartCanvas,{type:'bar',data:{labels:daily.map(d=>d.x),datasets:[{label:'Daily PnL',data:daily.map(d=>d.y)}]}});
+  dailyChart=new Chart(dailyChartCanvas,{type:'bar',data:{labels:d.map(x=>x.x),datasets:[{label:'Daily',data:d.map(x=>x.y)}]}});
 }
 
 function render(){
   const s=stats();
   statsDiv.innerHTML=`
-  Total PnL: ${s.total.toFixed(2)}<br>
-  Avg Win: ${s.avgWin.toFixed(2)}<br>
-  Avg Loss: ${s.avgLoss.toFixed(2)}<br>
-  Win Rate: ${s.winRate.toFixed(2)}%<br>
-  Sharpe Ratio: ${s.sharpe.toFixed(2)}<br>
-  Profit Factor: ${s.profitFactor.toFixed(2)}<br>
-  Max Drawdown: ${s.drawdown.toFixed(2)}
+  <div>Total PnL: ${s.total.toFixed(2)}</div>
+  <div>Win Rate: ${s.winRate.toFixed(2)}%</div>
+  <div>Sharpe: ${s.sharpe.toFixed(2)}</div>
+  <div>Profit Factor: ${s.profitFactor.toFixed(2)}</div>
+  <div>Drawdown: ${s.dd.toFixed(2)}</div>
   `;
 
   tradesDiv.innerHTML="";
   trades.forEach(t=>{
     const pnl=calculatePnL(t);
-    tradesDiv.innerHTML+=`<div style='border:1px solid #ccc; padding:10px; margin:10px 0;'>
-    <b>${t.date}</b> | ${t.instrument} | ${t.type}<br>
-    Entry: ${t.entry} Exit: ${t.exit} Lots: ${t.lots}<br>
-    PnL: ${pnl.toFixed(2)}
+    tradesDiv.innerHTML+=`<div style='border-bottom:1px solid gray; padding:10px;'>
+    <b>${t.date}</b> | ${t.instrument} | ${t.type} | PnL: <span style='color:${pnl>=0?"#22c55e":"#ef4444"}'>${pnl.toFixed(2)}</span>
     </div>`;
   });
 
@@ -146,10 +134,10 @@ function render(){
 }
 
 const equityChartCanvas=document.getElementById('equityChart');
-const statsDiv=document.getElementById('stats');
-const tradesDiv=document.getElementById('trades');
 const histogram=document.getElementById('histogram');
 const dailyChartCanvas=document.getElementById('dailyChart');
+const statsDiv=document.getElementById('stats');
+const tradesDiv=document.getElementById('trades');
 
 render();
 </script>
