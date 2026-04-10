@@ -2,38 +2,34 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Trading Journal</title>
+  <title>Trading Journal Pro</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-<body style="font-family: Arial; padding:20px;">
+<body style="font-family: Arial; padding:20px; max-width:1000px; margin:auto;">
 
-<h1>📊 Trading Journal</h1>
+<h1>📊 Trading Journal (Pro)</h1>
 
 <div style="display:grid; gap:10px; max-width:400px;">
-  <select id="type">
-    <option>Long</option>
-    <option>Short</option>
-  </select>
-
-  <select id="instrument">
-    <option>NQ</option>
-    <option>ES</option>
-    <option>GC</option>
-  </select>
-
+  <select id="type"><option>Long</option><option>Short</option></select>
+  <select id="instrument"><option>NQ</option><option>ES</option><option>GC</option></select>
   <input id="entry" placeholder="Entry Price">
   <input id="exit" placeholder="Exit Price">
   <input id="lots" placeholder="Lots">
   <input id="date" type="date">
-
   <button onclick="addTrade()" style="padding:10px; background:black; color:white;">Add Trade</button>
 </div>
 
-<h2>📈 Statistics</h2>
-<p id="stats"></p>
+<h2>📈 Key Statistics</h2>
+<div id="stats"></div>
 
 <h2>📉 Equity Curve</h2>
-<canvas id="chart" width="600" height="300"></canvas>
+<canvas id="equityChart"></canvas>
+
+<h2>📊 PnL Distribution</h2>
+<canvas id="histogram"></canvas>
+
+<h2>📅 Daily PnL</h2>
+<canvas id="dailyChart"></canvas>
 
 <h2>📋 Trades</h2>
 <div id="trades"></div>
@@ -42,26 +38,22 @@
 let trades = JSON.parse(localStorage.getItem("trades") || "[]");
 
 function calculatePnL(t) {
-  const entry = parseFloat(t.entry);
-  const exit = parseFloat(t.exit);
-  const lots = parseFloat(t.lots);
+  const entry = +t.entry, exit = +t.exit, lots = +t.lots;
   if (!entry || !exit || !lots) return 0;
   return (t.type === "Long" ? exit - entry : entry - exit) * lots;
 }
 
 function addTrade() {
   const t = {
-    type: document.getElementById("type").value,
-    instrument: document.getElementById("instrument").value,
-    entry: document.getElementById("entry").value,
-    exit: document.getElementById("exit").value,
-    lots: document.getElementById("lots").value,
-    date: document.getElementById("date").value,
+    type: type.value,
+    instrument: instrument.value,
+    entry: entry.value,
+    exit: exit.value,
+    lots: lots.value,
+    date: date.value,
     id: Date.now()
   };
-
   if (!t.entry || !t.exit || !t.lots || !t.date) return;
-
   trades.push(t);
   localStorage.setItem("trades", JSON.stringify(trades));
   render();
@@ -69,69 +61,95 @@ function addTrade() {
 
 function stats() {
   const pnls = trades.map(calculatePnL);
-  const wins = pnls.filter(p => p > 0);
-  const losses = pnls.filter(p => p < 0);
+  const wins = pnls.filter(p=>p>0);
+  const losses = pnls.filter(p=>p<0);
 
   const total = pnls.reduce((a,b)=>a+b,0);
   const avgWin = wins.length ? wins.reduce((a,b)=>a+b,0)/wins.length : 0;
   const avgLoss = losses.length ? losses.reduce((a,b)=>a+b,0)/losses.length : 0;
-  const winRate = pnls.length ? (wins.length / pnls.length)*100 : 0;
+  const winRate = pnls.length ? (wins.length/pnls.length)*100 : 0;
 
-  return { total, avgWin, avgLoss, winRate };
+  const mean = total/(pnls.length||1);
+  const variance = pnls.reduce((a,b)=>a+(b-mean)**2,0)/(pnls.length||1);
+  const std = Math.sqrt(variance);
+  const sharpe = std ? mean/std : 0;
+
+  const profitFactor = Math.abs(wins.reduce((a,b)=>a+b,0) / (losses.reduce((a,b)=>a+b,0) || 1));
+
+  let peak=0, drawdown=0, cum=0;
+  pnls.forEach(p=>{
+    cum+=p;
+    if(cum>peak) peak=cum;
+    const dd = peak-cum;
+    if(dd>drawdown) drawdown=dd;
+  });
+
+  return { total, avgWin, avgLoss, winRate, sharpe, profitFactor, drawdown };
 }
 
 function equityData() {
-  let cum = 0;
-  return trades.map((t,i) => {
-    cum += calculatePnL(t);
-    return cum;
+  let cum=0;
+  return trades.map((t,i)=>{
+    cum+=calculatePnL(t);
+    return {x:i+1, y:cum};
   });
 }
 
-let chart;
-function renderChart() {
-  const ctx = document.getElementById('chart');
-  const data = equityData();
-
-  if (chart) chart.destroy();
-
-  chart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: data.map((_,i)=>i+1),
-      datasets: [{
-        label: 'Equity',
-        data: data
-      }]
-    }
+function dailyPnL() {
+  const map={};
+  trades.forEach(t=>{
+    const d=t.date;
+    map[d]=(map[d]||0)+calculatePnL(t);
   });
+  return Object.entries(map).map(([d,v])=>({x:d,y:v}));
 }
 
-function render() {
-  const s = stats();
-  document.getElementById("stats").innerHTML = `
-    Total PnL: ${s.total.toFixed(2)} <br>
-    Avg Win: ${s.avgWin.toFixed(2)} <br>
-    Avg Loss: ${s.avgLoss.toFixed(2)} <br>
-    Win Rate: ${s.winRate.toFixed(2)}%
+function pnlList(){return trades.map(calculatePnL);}
+
+let equityChart, histChart, dailyChart;
+
+function renderCharts(){
+  if(equityChart) equityChart.destroy();
+  equityChart=new Chart(equityChartCanvas,{type:'line',data:{labels:equityData().map(p=>p.x),datasets:[{label:'Equity',data:equityData().map(p=>p.y)}]}});
+
+  if(histChart) histChart.destroy();
+  histChart=new Chart(histogram,{type:'bar',data:{labels:pnlList(),datasets:[{label:'PnL',data:pnlList()}]}});
+
+  const daily=dailyPnL();
+  if(dailyChart) dailyChart.destroy();
+  dailyChart=new Chart(dailyChartCanvas,{type:'bar',data:{labels:daily.map(d=>d.x),datasets:[{label:'Daily PnL',data:daily.map(d=>d.y)}]}});
+}
+
+function render(){
+  const s=stats();
+  statsDiv.innerHTML=`
+  Total PnL: ${s.total.toFixed(2)}<br>
+  Avg Win: ${s.avgWin.toFixed(2)}<br>
+  Avg Loss: ${s.avgLoss.toFixed(2)}<br>
+  Win Rate: ${s.winRate.toFixed(2)}%<br>
+  Sharpe Ratio: ${s.sharpe.toFixed(2)}<br>
+  Profit Factor: ${s.profitFactor.toFixed(2)}<br>
+  Max Drawdown: ${s.drawdown.toFixed(2)}
   `;
 
-  const tradesDiv = document.getElementById("trades");
-  tradesDiv.innerHTML = "";
-
-  trades.forEach(t => {
-    const pnl = calculatePnL(t);
-    tradesDiv.innerHTML += `
-      <div style="border:1px solid #ccc; padding:10px; margin:10px 0;">
-        <strong>${t.date}</strong> | ${t.instrument} | ${t.type}<br>
-        Entry: ${t.entry} | Exit: ${t.exit} | Lots: ${t.lots}<br>
-        PnL: ${pnl.toFixed(2)}
-      </div>
-    `;
+  tradesDiv.innerHTML="";
+  trades.forEach(t=>{
+    const pnl=calculatePnL(t);
+    tradesDiv.innerHTML+=`<div style='border:1px solid #ccc; padding:10px; margin:10px 0;'>
+    <b>${t.date}</b> | ${t.instrument} | ${t.type}<br>
+    Entry: ${t.entry} Exit: ${t.exit} Lots: ${t.lots}<br>
+    PnL: ${pnl.toFixed(2)}
+    </div>`;
   });
 
-  renderChart();
+  renderCharts();
 }
+
+const equityChartCanvas=document.getElementById('equityChart');
+const statsDiv=document.getElementById('stats');
+const tradesDiv=document.getElementById('trades');
+const histogram=document.getElementById('histogram');
+const dailyChartCanvas=document.getElementById('dailyChart');
 
 render();
 </script>
