@@ -1,0 +1,112 @@
+// Simple Trading Journal Web App (React + LocalStorage)
+// You can deploy this easily on GitHub Pages using Vite
+
+import { useState, useEffect } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+
+export default function App() {
+  const [trades, setTrades] = useState([]);
+  const [form, setForm] = useState({
+    type: "Long",
+    instrument: "NQ",
+    entry: "",
+    exit: "",
+    lots: "",
+    date: "",
+  });
+
+  useEffect(() => {
+    const saved = localStorage.getItem("trades");
+    if (saved) setTrades(JSON.parse(saved));
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("trades", JSON.stringify(trades));
+  }, [trades]);
+
+  const calculatePnL = (t) => {
+    const entry = parseFloat(t.entry);
+    const exit = parseFloat(t.exit);
+    const lots = parseFloat(t.lots);
+    if (!entry || !exit || !lots) return 0;
+    return (t.type === "Long" ? exit - entry : entry - exit) * lots;
+  };
+
+  const addTrade = () => {
+    const newTrade = { ...form, id: Date.now() };
+    setTrades([...trades, newTrade]);
+    setForm({ type: "Long", instrument: "NQ", entry: "", exit: "", lots: "", date: "" });
+  };
+
+  const stats = () => {
+    const pnls = trades.map(calculatePnL);
+    const wins = pnls.filter(p => p > 0);
+    const losses = pnls.filter(p => p < 0);
+
+    const avgWin = wins.length ? wins.reduce((a,b)=>a+b,0)/wins.length : 0;
+    const avgLoss = losses.length ? losses.reduce((a,b)=>a+b,0)/losses.length : 0;
+    const total = pnls.reduce((a,b)=>a+b,0);
+
+    const mean = total / (pnls.length || 1);
+    const variance = pnls.reduce((a,b)=>a + Math.pow(b - mean,2),0)/(pnls.length || 1);
+    const std = Math.sqrt(variance);
+    const sharpe = std ? mean/std : 0;
+
+    return { avgWin, avgLoss, total, sharpe };
+  };
+
+  const s = stats();
+
+  return (
+    <div className="p-6 grid gap-6">
+      <h1 className="text-2xl font-bold">Trading Journal</h1>
+
+      <Card>
+        <CardContent className="grid gap-2 p-4">
+          <select value={form.type} onChange={e=>setForm({...form, type:e.target.value})}>
+            <option>Long</option>
+            <option>Short</option>
+          </select>
+
+          <select value={form.instrument} onChange={e=>setForm({...form, instrument:e.target.value})}>
+            <option>NQ</option>
+            <option>ES</option>
+            <option>GC</option>
+          </select>
+
+          <Input placeholder="Entry" value={form.entry} onChange={e=>setForm({...form, entry:e.target.value})} />
+          <Input placeholder="Exit" value={form.exit} onChange={e=>setForm({...form, exit:e.target.value})} />
+          <Input placeholder="Lots" value={form.lots} onChange={e=>setForm({...form, lots:e.target.value})} />
+          <Input type="date" value={form.date} onChange={e=>setForm({...form, date:e.target.value})} />
+
+          <Button onClick={addTrade}>Add Trade</Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-4">
+          <h2 className="font-bold">Statistics</h2>
+          <p>Total PnL: {s.total.toFixed(2)}</p>
+          <p>Avg Win: {s.avgWin.toFixed(2)}</p>
+          <p>Avg Loss: {s.avgLoss.toFixed(2)}</p>
+          <p>Sharpe Ratio: {s.sharpe.toFixed(2)}</p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-4">
+          <h2 className="font-bold">Trades</h2>
+          {trades.map(t => (
+            <div key={t.id} className="border p-2 my-2">
+              <p>{t.date} | {t.instrument} | {t.type}</p>
+              <p>Entry: {t.entry} Exit: {t.exit} Lots: {t.lots}</p>
+              <p>PnL: {calculatePnL(t).toFixed(2)}</p>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
