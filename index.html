@@ -1,9 +1,6 @@
-
- 
+// Improved Trading Journal (Clean UI + Charts + Better Stats)
 import { useState, useEffect } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 
 export default function App() {
   const [trades, setTrades] = useState([]);
@@ -34,6 +31,7 @@ export default function App() {
   };
 
   const addTrade = () => {
+    if (!form.entry || !form.exit || !form.lots || !form.date) return;
     const newTrade = { ...form, id: Date.now() };
     setTrades([...trades, newTrade]);
     setForm({ type: "Long", instrument: "NQ", entry: "", exit: "", lots: "", date: "" });
@@ -44,68 +42,89 @@ export default function App() {
     const wins = pnls.filter(p => p > 0);
     const losses = pnls.filter(p => p < 0);
 
+    const total = pnls.reduce((a,b)=>a+b,0);
     const avgWin = wins.length ? wins.reduce((a,b)=>a+b,0)/wins.length : 0;
     const avgLoss = losses.length ? losses.reduce((a,b)=>a+b,0)/losses.length : 0;
-    const total = pnls.reduce((a,b)=>a+b,0);
+    const winRate = pnls.length ? (wins.length / pnls.length) * 100 : 0;
 
     const mean = total / (pnls.length || 1);
     const variance = pnls.reduce((a,b)=>a + Math.pow(b - mean,2),0)/(pnls.length || 1);
     const std = Math.sqrt(variance);
     const sharpe = std ? mean/std : 0;
 
-    return { avgWin, avgLoss, total, sharpe };
+    return { total, avgWin, avgLoss, winRate, sharpe };
+  };
+
+  const equityCurve = () => {
+    let cum = 0;
+    return trades.map((t, i) => {
+      cum += calculatePnL(t);
+      return { trade: i + 1, equity: cum };
+    });
   };
 
   const s = stats();
 
   return (
-    <div className="p-6 grid gap-6">
-      <h1 className="text-2xl font-bold">Trading Journal</h1>
+    <div style={{ padding: 20, fontFamily: "Arial" }}>
+      <h1 style={{ fontSize: 28, fontWeight: "bold" }}>📊 Trading Journal</h1>
 
-      <Card>
-        <CardContent className="grid gap-2 p-4">
-          <select value={form.type} onChange={e=>setForm({...form, type:e.target.value})}>
-            <option>Long</option>
-            <option>Short</option>
-          </select>
+      {/* Form */}
+      <div style={{ display: "grid", gap: 10, maxWidth: 400, marginTop: 20 }}>
+        <select value={form.type} onChange={e=>setForm({...form, type:e.target.value})}>
+          <option>Long</option>
+          <option>Short</option>
+        </select>
 
-          <select value={form.instrument} onChange={e=>setForm({...form, instrument:e.target.value})}>
-            <option>NQ</option>
-            <option>ES</option>
-            <option>GC</option>
-          </select>
+        <select value={form.instrument} onChange={e=>setForm({...form, instrument:e.target.value})}>
+          <option>NQ</option>
+          <option>ES</option>
+          <option>GC</option>
+        </select>
 
-          <Input placeholder="Entry" value={form.entry} onChange={e=>setForm({...form, entry:e.target.value})} />
-          <Input placeholder="Exit" value={form.exit} onChange={e=>setForm({...form, exit:e.target.value})} />
-          <Input placeholder="Lots" value={form.lots} onChange={e=>setForm({...form, lots:e.target.value})} />
-          <Input type="date" value={form.date} onChange={e=>setForm({...form, date:e.target.value})} />
+        <input placeholder="Entry Price" value={form.entry} onChange={e=>setForm({...form, entry:e.target.value})} />
+        <input placeholder="Exit Price" value={form.exit} onChange={e=>setForm({...form, exit:e.target.value})} />
+        <input placeholder="Lots" value={form.lots} onChange={e=>setForm({...form, lots:e.target.value})} />
+        <input type="date" value={form.date} onChange={e=>setForm({...form, date:e.target.value})} />
 
-          <Button onClick={addTrade}>Add Trade</Button>
-        </CardContent>
-      </Card>
+        <button onClick={addTrade} style={{ padding: 10, background: "black", color: "white" }}>
+          Add Trade
+        </button>
+      </div>
 
-      <Card>
-        <CardContent className="p-4">
-          <h2 className="font-bold">Statistics</h2>
-          <p>Total PnL: {s.total.toFixed(2)}</p>
-          <p>Avg Win: {s.avgWin.toFixed(2)}</p>
-          <p>Avg Loss: {s.avgLoss.toFixed(2)}</p>
-          <p>Sharpe Ratio: {s.sharpe.toFixed(2)}</p>
-        </CardContent>
-      </Card>
+      {/* Stats */}
+      <div style={{ marginTop: 30 }}>
+        <h2>📈 Statistics</h2>
+        <p>Total PnL: {s.total.toFixed(2)}</p>
+        <p>Avg Win: {s.avgWin.toFixed(2)}</p>
+        <p>Avg Loss: {s.avgLoss.toFixed(2)}</p>
+        <p>Win Rate: {s.winRate.toFixed(2)}%</p>
+        <p>Sharpe Ratio: {s.sharpe.toFixed(2)}</p>
+      </div>
 
-      <Card>
-        <CardContent className="p-4">
-          <h2 className="font-bold">Trades</h2>
-          {trades.map(t => (
-            <div key={t.id} className="border p-2 my-2">
-              <p>{t.date} | {t.instrument} | {t.type}</p>
-              <p>Entry: {t.entry} Exit: {t.exit} Lots: {t.lots}</p>
-              <p>PnL: {calculatePnL(t).toFixed(2)}</p>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      {/* Chart */}
+      <div style={{ marginTop: 30 }}>
+        <h2>📉 Equity Curve</h2>
+        <LineChart width={600} height={300} data={equityCurve()}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="trade" />
+          <YAxis />
+          <Tooltip />
+          <Line type="monotone" dataKey="equity" />
+        </LineChart>
+      </div>
+
+      {/* Trades */}
+      <div style={{ marginTop: 30 }}>
+        <h2>📋 Trades</h2>
+        {trades.map(t => (
+          <div key={t.id} style={{ border: "1px solid #ccc", padding: 10, marginBottom: 10 }}>
+            <strong>{t.date}</strong> | {t.instrument} | {t.type}
+            <div>Entry: {t.entry} | Exit: {t.exit} | Lots: {t.lots}</div>
+            <div>PnL: {calculatePnL(t).toFixed(2)}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
